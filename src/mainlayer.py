@@ -6,7 +6,7 @@ calls `require_payment` before serving the response. The function raises
 `PaymentRequiredError` when the caller has insufficient credits, letting
 FastAPI return a clean 402 response.
 
-Base URL: https://api.mainlayer.xyz
+Base URL: https://api.mainlayer.fr
 Auth:     Authorization: Bearer <api_key>
 """
 
@@ -21,7 +21,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-MAINLAYER_BASE_URL = os.getenv("MAINLAYER_BASE_URL", "https://api.mainlayer.xyz")
+MAINLAYER_BASE_URL = os.getenv("MAINLAYER_BASE_URL", "https://api.mainlayer.fr")
 MAINLAYER_API_KEY = os.getenv("MAINLAYER_API_KEY", "")
 
 # Price catalogue (USD)
@@ -125,7 +125,7 @@ class MainlayerClient:
             if status == 402:
                 raise PaymentRequiredError(
                     f"Payment of ${amount_usd:.2f} required for {endpoint}. "
-                    "Top up your Mainlayer balance at https://mainlayer.xyz/dashboard",
+                    "Top up your Mainlayer balance at https://dashboard.mainlayer.fr",
                     amount_usd=amount_usd,
                     endpoint=endpoint,
                 ) from exc
