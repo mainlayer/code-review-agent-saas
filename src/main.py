@@ -84,12 +84,25 @@ async def _require_payment(
     amount_usd: float,
     endpoint: str,
     x_mainlayer_token: str = "",
+    request: Request | None = None,
 ) -> None:
     """Raise 402 if no payment token is present."""
     if not x_mainlayer_token:
+        client_ip = request.client.host if request and request.client else "unknown"
+        logger.warning(
+            "review: payment_required endpoint=%s amount=$%.2f ip=%s",
+            endpoint,
+            amount_usd,
+            client_ip,
+        )
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={"error": "payment_required", "info": "mainlayer.fr", "amount_usd": amount_usd},
+            detail={
+                "error": "payment_required",
+                "info": "mainlayer.fr",
+                "amount_usd": amount_usd,
+                "message": f"Supply x-mainlayer-token header for payment processing. Cost: ${amount_usd:.2f}",
+            },
         )
     await charge_review(token=x_mainlayer_token, amount_usd=amount_usd, endpoint=endpoint)
 
@@ -108,6 +121,7 @@ async def _require_payment(
 )
 async def review_code_endpoint(
     body: CodeReviewRequest,
+    request: Request,
     x_mainlayer_token: str = Header(default="", alias="x-mainlayer-token"),
 ) -> CodeReviewResponse:
     """Review a raw source-code snippet.
@@ -116,7 +130,14 @@ async def review_code_endpoint(
     $0.05 per call. Specify `focus` to narrow the analysis to security,
     performance, or style.
     """
-    await _require_payment(PRICE_CODE_REVIEW, "/review", x_mainlayer_token)
+    # Input validation
+    if not body.code.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "invalid_request", "message": "Code cannot be empty."},
+        )
+
+    await _require_payment(PRICE_CODE_REVIEW, "/review", x_mainlayer_token, request)
 
     request_id = str(uuid.uuid4())
     result = review_code(
@@ -126,12 +147,16 @@ async def review_code_endpoint(
         request_id=request_id,
     )
 
+    client_ip = request.client.host if request.client else "unknown"
     logger.info(
-        "review: request_id=%s language=%s issues=%d score=%.1f",
+        "review: request_id=%s language=%s focus=%s issues=%d score=%.1f cost=$%.2f ip=%s",
         request_id,
         body.language,
+        body.focus.value,
         result["summary"].total_issues,
         result["summary"].score,
+        PRICE_CODE_REVIEW,
+        client_ip,
     )
 
     return CodeReviewResponse(
